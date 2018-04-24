@@ -128,7 +128,7 @@ class VPN(Q):
         
         time = tf.shape(pi.x)[0]
         steps = tf.minimum(self.args.prediction_step, time)
-        self.rollout_num = tf.to_float(time * steps - steps * (steps - 1) / 2)
+        self.rollout_num = tf.to_float(time * steps - tf.to_int32(steps * (steps - 1) / 2))
         
         # reward/gamma/value prediction
         self.r_delta = util.lower_triangular(
@@ -207,8 +207,12 @@ class VPN(Q):
                 act_idx = np.random.randint(0, env.action_space.n)
                 action = np.zeros(env.action_space.n)
                 action[act_idx] = 1
-                state, reward, terminal, _ = env.step(action.argmax())
-                time = 1
+                env_return = env.step(action.argmax())
+                if len(env_return) == 4:
+                    state, reward, terminal, _ = env_return
+                elif len(env_return) == 5:
+                    state, reward, terminal, _, time = env_return
+                
                 self.rand_rollouts.add(state_off, action, reward, time, 
                         meta_off, terminal)
                 state_off = state

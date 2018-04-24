@@ -133,8 +133,12 @@ runner appends the policy to the queue.
                     features = []
 
             # argmax to convert from one-hot
-            state, reward, terminal, info = env.step(action.argmax())
-            time = 1
+            env_return = env.step(action.argmax())
+            if len(env_return) == 4:
+                state, reward, terminal, info = env_return
+            elif len(env_return) == 5:
+                state, reward, terminal, info, time = env_return
+            
             if hasattr(env, 'atari'):
                 reward = np.clip(reward, -1, 1)
 
@@ -248,7 +252,7 @@ class AsyncSolver(object):
             self.local_steps = 0
     
     def define_summary(self):
-        summary.scalar("model/lr", self.learning_rate)
+        tf.summary.scalar("model/lr", self.learning_rate)
         if hasattr(self.env, 'tf_visualize'):
             tf.summary.image("model/state", self.env.tf_visualize(self.local_network.x), max_outputs=10)
         tf.summary.scalar("gradient/grad_norm", tf.global_norm(self.grads))

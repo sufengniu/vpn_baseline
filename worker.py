@@ -157,8 +157,12 @@ def evaluate(env, network, num_play=3000, eps=0.0):
                 action[act_idx] = 1
                 features = []
 
-            state, reward, terminal, info = env.step(action.argmax())
-            time = 1
+            env_return = env.step(action.argmax())
+            if len(env_return) == 4:
+                state, reward, terminal, _ = env_return
+            elif len(env_return) == 5:
+                state, reward, terminal, _, time = env_return
+
             last_state = state
             last_features = features
             last_meta = None if not hasattr(env, 'meta') else env.meta()
