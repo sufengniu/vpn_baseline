@@ -68,7 +68,7 @@ def transform_fc(x, a, n_actions, name, bias_init=0, pad="SAME"):
             initializer=normalized_columns_initializer(0.1))
     if a is not None: 
         # Transform only for the given action
-        mul = x * w[tf.to_int32(tf.squeeze(tf.argmax(a, axis=1))), :] 
+        mul = x * w[tf.to_int32(tf.squeeze(tf.argmax(a, axis=-1))), :] 
     else:
         # Enumerate all possible actions and concatenate them
         transformed = []
@@ -105,7 +105,7 @@ def transform_conv_state(x, a, n_actions, filter_size=(3, 3), pad="SAME"):
     b_gate = tf.get_variable("gate-b", [1, 1, 1, num_filters], 
                     initializer=tf.constant_initializer(0.0))
     if a is not None:
-        idx = tf.to_int32(tf.squeeze(tf.argmax(a, axis=1)))
+        idx = tf.to_int32(tf.squeeze(tf.argmax(a, axis=-1)))
         conv = tf.nn.conv2d(x, w[:, :, :, idx, :], stride_shape, pad) + b[:, :, :, idx, :]
         conv = act_fn(conv)
     else:
@@ -146,7 +146,7 @@ def transform_conv_pred(x, a, n_actions, filter_size=(3, 3), pad="SAME"):
     b_dec = tf.get_variable("b-dec", [1, 1, 1, num_filters], 
                     initializer=tf.constant_initializer(0.0))
     if a is not None:
-        idx = tf.to_int32(tf.squeeze(tf.argmax(a, axis=1)))
+        idx = tf.to_int32(tf.squeeze(tf.argmax(a, axis=-1)))
         conv = tf.nn.conv2d(x, w[:, :, :, idx, :], stride_shape, pad) + b[:, :, :, idx, :]
         conv = act_fn(conv)
     else:
@@ -266,6 +266,7 @@ class Model(object):
                     f_size=[3,3,4],
                     f_pad="SAME",
                     branch=[4,4,4],
+                    replan=True,
                     meta_dim=0):
         self.n_actions = n_actions
         self.type = type
@@ -282,6 +283,7 @@ class Model(object):
         self.f_pad = f_pad
         self.meta_dim = meta_dim
         self.xdim = list(ob_space)
+        self.replan = replan
         self.branch = [min(n_actions, k) for k in branch]
 
         self.s, self.state_in, self.state_out = self.build_model(self.x, self.meta)
@@ -387,6 +389,7 @@ class Model(object):
 
             idx = tf.squeeze(idx_list[0])
             self.q_deep = tf.squeeze(q_plan[0])
+            self.plan = q_plan
             self.q_plan = tf.sparse_to_dense(idx, [self.n_actions], self.q_deep, 
                         default_value=-100, validate_indices=False)
 
@@ -431,7 +434,15 @@ class Model(object):
             return sess.run([self.sample, self.vf] + self.state_out, feed_dict)
         elif self.type == 'q':
             return sess.run([self.sample] + self.state_out, feed_dict)
-        elif self.type == 'vpn':
+        elif self.type == 'vpn' and self.replan == True:
+            out = sess.run([self.q_plan, self.plan] + self.state_out, feed_dict)
+            q = out[0]
+            plan = out[1]
+            state_out = out[2:]
+            act = np.zeros_like(q)
+            act[q.argmax()] = 1
+            return [act, plan] + state_out
+        elif self.type == "vpn" and self.replan == False:
             out = sess.run([self.q_plan] + self.state_out, feed_dict)
             q = out[0]
             state_out = out[1:]

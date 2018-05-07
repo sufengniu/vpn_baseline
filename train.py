@@ -13,7 +13,7 @@ parser.add_argument('-r', '--remotes', default=None,
                     '(e.g. -r vnc://localhost:5900+15900,vnc://localhost:5901+15901).')
 parser.add_argument('-e', '--env-id', type=str, default="maze",
                     help="Environment id")
-parser.add_argument('-l', '--log', type=str, default="/scratch3/sniu/vpn/maze", 
+parser.add_argument('-l', '--log', type=str, default="/scratch1/sniu/vpn/maze", 
                     help="Log directory path")
 parser.add_argument('-d', '--dry-run', action='store_true',
                     help="Print out commands rather than executing them")
@@ -56,6 +56,7 @@ parser.add_argument('--eps-eval', type=float, default=0.0, help="Epsilon for eva
 parser.add_argument('--prediction-step', type=int, default=3, help="number of prediction steps")
 parser.add_argument('--branch', type=str, default="4,4,4", help="branching factor")
 parser.add_argument('--buf', type=int, default=10**6, help="num of steps for random buffer")
+parser.add_argument('--replan', type=bool, default=False, help="whether use replan or not")
 
 def new_cmd(session, name, cmd, mode, logdir, shell):
     if isinstance(cmd, (list, tuple)):
@@ -99,6 +100,7 @@ def create_commands(session, args, shell='bash'):
         '--branch', args.branch,
         '--config', args.config,
         '--buf', args.buf,
+        '--replan', args.replan,
         ]
 
     if len(args.gpu) > 0:

@@ -80,6 +80,7 @@ class VPN(Q):
                 f_stride=self.args.f_stride,
                 f_size=self.args.f_size,
                 branch=self.args.branch,
+                replan=self.args.replan,
                 meta_dim=self.args.meta_dim,
                 )
 
@@ -87,8 +88,8 @@ class VPN(Q):
     
     def process_rollout(self, rollout, gamma, lambda_=1.0):
         """
-    given a rollout, compute its returns
-    """
+        given a rollout, compute its returns
+        """
         batch_si = np.asarray(rollout.states)
         batch_a = np.asarray(rollout.actions)
         rewards = np.asarray(rollout.rewards)

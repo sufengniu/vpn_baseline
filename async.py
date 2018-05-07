@@ -95,10 +95,10 @@ that would constantly interact with the environment and tell it what to do.  Thi
 
 def env_runner(env, network, num_local_steps, summary_writer, solver=None):
     """
-The logic of the thread runner.  In brief, it constantly keeps on running
-the policy, and as long as the rollout exceeds a certain length, the thread
-runner appends the policy to the queue.
-"""
+    The logic of the thread runner.  In brief, it constantly keeps on running
+    the policy, and as long as the rollout exceeds a certain length, the thread
+    runner appends the policy to the queue.
+    """
     last_state = env.reset()
     last_features = network.get_initial_features()
     last_meta = None if not hasattr(env, 'meta') else env.meta()
@@ -109,18 +109,42 @@ runner appends the policy to the queue.
         terminal_end = False
         rollout = PartialRollout()
 
+        current_plan = []
         for _ in range(num_local_steps):
             value = None
             
             # choose an action from the policy
             if not hasattr(solver, 'epsilon') or solver.epsilon() < np.random.uniform():
-                fetched = network.act(last_state, last_features,
-                        meta=last_meta)
-                if network.type == 'policy':
-                    action, value, features = fetched[0], fetched[1], fetched[2:]
-                else:
-                    action, features = fetched[0], fetched[1:]
-            else: 
+                
+                if solver.replan == False:
+                    fetched = network.act(last_state, last_features,
+                            meta=last_meta)
+                    if network.type == 'policy':
+                        action, value, features = fetched[0], fetched[1], fetched[2:]            
+                    else:
+                        action, features = fetched[0], fetched[1:]
+
+                elif solver.replan == True: # by default it is vpn
+                    if len(current_plan) == 0:
+                        fetched = network.act(last_state, last_features,
+                                meta=last_meta)
+                        action, plan, features = fetched[0], fetched[1], fetched[2:]
+                        idx = []
+                        for i in range(len(plan)):
+                            if i == 0:
+                                step_action = np.argmax(plan[i])
+                                idx.append(step_action)
+                            else:
+                                idx_begin = idx[-1]*solver.branch[i]
+                                idx_end = (idx[-1]+1)*solver.branch[i]
+                                step_action = np.argmax(plan[i][idx_begin:idx_end])
+                                idx.append(step_action + solver.branch[i]*idx[-1])
+                            current_plan.append(step_action)
+
+                    action = np.zeros(env.action_space.n)
+                    action_idx = current_plan.pop(0)
+                    action[act_idx] = 1.0
+            else:
                 # choose a random action
                 assert network.type != 'policy'
                 act_idx = np.random.randint(0, env.action_space.n)
@@ -143,7 +167,7 @@ runner appends the policy to the queue.
                 reward = np.clip(reward, -1, 1)
 
             # collect the experience
-            rollout.add(last_state, action, reward, terminal, last_features, 
+            rollout.add(last_state, action, reward, terminal, last_features,
                         value = value, time = time, meta=last_meta)
 
             last_state = state
@@ -185,6 +209,8 @@ class AsyncSolver(object):
         self.ld = args.ld
         self.lr = args.lr
         self.model = args.model
+        self.replan = args.replan
+        self.branch = args.branch
         self.env_off = env_off
         self.last_global_step = 0
 

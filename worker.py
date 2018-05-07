@@ -138,24 +138,48 @@ More tensorflow setup for data parallelism
     port += 1
     return cluster
 
-def evaluate(env, network, num_play=3000, eps=0.0):
+def evaluate(env, network, branch, num_play=3000, eps=0.0, replan=False):
     for iter in range(0, num_play):
         last_state = env.reset()
         last_features = network.get_initial_features()
         last_meta = None if not hasattr(env, 'meta') else env.meta()
+
+        current_plan = []
         while True:
             if eps == 0.0 or np.random.rand() > eps:
-                fetched = network.act(last_state, last_features,
-                        meta=last_meta)
-                if network.type == 'policy':
-                    action, features = fetched[0], fetched[2:]
-                else:
-                    action, features = fetched[0], fetched[1:]
+                if replan == False:
+                    fetched = network.act(last_state, last_features,
+                            meta=last_meta)
+                    if network.type == 'policy':
+                        action, features = fetched[0], fetched[2:]
+                    else:
+                        action, features = fetched[0], fetched[1:]
+                elif replan == True:
+                    if len(current_plan) == 0:
+                        fetched = network.act(last_state, last_features,
+                                meta=last_meta)
+                        action, plan, features = fetched[0], fetched[1], fetched[2:]
+                        idx = []
+                        for i in range(len(plan)):
+                            if i == 0:
+                                step_action = np.argmax(plan[i])
+                                idx.append(step_action)
+                            else:
+                                idx_begin = idx[-1]*branch[i]
+                                idx_end = (idx[-1]+1)*branch[i]
+                                step_action = np.argmax(plan[i][idx_begin:idx_end])
+                                idx.append(step_action + branch[i]*idx[-1])
+                            current_plan.append(step_action)
+                    
+                    action = np.zeros(env.action_space.n)
+                    action_idx = current_plan.pop(0)
+                    action[act_idx] = 1.0
             else:
                 act_idx = np.random.randint(0, env.action_space.n)
                 action = np.zeros(env.action_space.n)
                 action[act_idx] = 1
                 features = []
+
 
             env_return = env.step(action.argmax())
             if len(env_return) == 4:
@@ -230,7 +254,7 @@ def run_tester(args, server):
             logger.info("Start evaluation (Epoch %d)", epoch)
             saver.restore(sess, path)
             np.random.seed(args.seed)
-            reward = evaluate(env, agent.local_network, args.eval_num, eps=args.eps_eval)
+            reward = evaluate(env, agent.local_network, args.branch, args.eval_num, eps=args.eps_eval, replan=args.replan)
 
             logfile = open(os.path.join(args.log, "eval.csv"), "a")
             print("Epoch: %d, Reward: %.2f" % (epoch, reward))
@@ -300,7 +324,8 @@ Setting up Tensorflow for data parallel work
     parser.add_argument('--prediction-step', type=int, default=3, help="number of prediction steps")
     parser.add_argument('--branch', type=str, default="4,4,4", help="branching factor")
     parser.add_argument('--buf', type=int, default=10**6, help="num of steps for random buffer")
-
+    parser.add_argument('--replan', type=bool, default=False, help="whether use replan or not")
+    
     args = parser.parse_args()
     args.f_num = util.parse_to_num(args.f_num)
     args.f_stride = util.parse_to_num(args.f_stride)
